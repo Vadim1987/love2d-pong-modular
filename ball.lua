@@ -1,4 +1,4 @@
--- Ball object (now circular, with frame tracking for swept collision)
+-- Ball module: center spawn, tracks prev position for swept collision
 
 local Ball = {}
 Ball.__index = Ball
@@ -6,8 +6,8 @@ Ball.__index = Ball
 function Ball:create()
     local ball = setmetatable({}, self)
     ball.radius = BALL_SIZE
-    ball.x = WINDOW_WIDTH / 2
-    ball.y = WINDOW_HEIGHT / 2
+    ball.x = (BAT_MIN_X + BAT_MAX_X) / 2
+    ball.y = (BAT_MIN_Y + BAT_MAX_Y) / 2
     ball.dx = BALL_SPEED_X * (math.random(2) == 1 and 1 or -1)
     ball.dy = BALL_SPEED_Y * (math.random(2) == 1 and 1 or -1)
     ball.prev_x = ball.x
@@ -16,8 +16,8 @@ function Ball:create()
 end
 
 function Ball:reset()
-    self.x = WINDOW_WIDTH / 2
-    self.y = WINDOW_HEIGHT / 2
+    self.x = (BAT_MIN_X + BAT_MAX_X) / 2
+    self.y = (BAT_MIN_Y + BAT_MAX_Y) / 2
     self.dx = BALL_SPEED_X * (math.random(2) == 1 and 1 or -1)
     self.dy = BALL_SPEED_Y * (math.random(2) == 1 and 1 or -1)
     self.prev_x = self.x
@@ -31,11 +31,9 @@ function Ball:update(dt)
     self.y = self.y + self.dy * dt
 end
 
-function Ball:draw()
-    love.graphics.circle('fill', self.x, self.y, self.radius)
-end
-
 return Ball
+
+
 
   
 
