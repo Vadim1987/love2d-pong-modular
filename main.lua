@@ -8,40 +8,34 @@ local player, opponent, ball
 local playerScore, opponentScore
 local gameState = "start"
 
-local opponentControl = "ai"
-local aiStrategy = AI.basic
+-- Choose your AI strategy: AI.follow or AI.clever
+local aiStrategy = AI.clever
 
 function love.load()
     love.window.setMode(WINDOW_WIDTH, WINDOW_HEIGHT)
     love.graphics.setBackgroundColor(COLOR_BG)
     math.randomseed(os.time())
-    player = Paddle:create(PADDLE_OFFSET_X, (WINDOW_HEIGHT - PADDLE_HEIGHT) / 2, true, false)
-    opponent = Paddle:create(WINDOW_WIDTH - PADDLE_OFFSET_X - PADDLE_WIDTH, (WINDOW_HEIGHT - PADDLE_HEIGHT) / 2, false, true)
+    player = Paddle:create(PADDLE_OFFSET_X, (WINDOW_HEIGHT - PADDLE_HEIGHT) / 2, BAT_MIN_X, BAT_MAX_X)
+    opponent = Paddle:create(WINDOW_WIDTH - PADDLE_OFFSET_X - PADDLE_WIDTH, (WINDOW_HEIGHT - PADDLE_HEIGHT) / 2, OPP_MIN_X, OPP_MAX_X)
     ball = Ball:create()
     playerScore, opponentScore = 0, 0
 end
 
 function love.update(dt)
     if gameState == "play" then
-        -- WASD: W/S = up/down, A/D = left/right (player)
+        -- Player controls: WASD (W/S = up/down, A/D = left/right)
         local vdir, hdir = 0, 0
         if love.keyboard.isDown('w') then vdir = -1 elseif love.keyboard.isDown('s') then vdir = 1 end
         if love.keyboard.isDown('a') then hdir = -1 elseif love.keyboard.isDown('d') then hdir = 1 end
         player:update(dt, vdir, hdir)
 
-        -- Opponent: AI or manual
-        local ovdir, ohdir = 0, 0
-        if opponentControl == "ai" then
-            ovdir, ohdir = aiStrategy(ball, opponent)
-        elseif opponentControl == "manual" then
-            if love.keyboard.isDown('up') then ovdir = -1 elseif love.keyboard.isDown('down') then ovdir = 1 end
-            if love.keyboard.isDown('left') then ohdir = -1 elseif love.keyboard.isDown('right') then ohdir = 1 end
-        end
+        -- Opponent: clever AI (vertical and horizontal)
+        local ovdir, ohdir = aiStrategy(ball, opponent)
         opponent:update(dt, ovdir, ohdir)
 
         ball:update(dt)
 
-        
+        -- Top/bottom wall collision
         if ball.y - ball.radius <= 0 then
             ball.y = ball.radius
             ball.dy = -ball.dy
@@ -50,9 +44,10 @@ function love.update(dt)
             ball.dy = -ball.dy
         end
 
-        
+        -- Paddle collisions (swept + relative bounce)
         if collision.sweptCollision(ball, player) then
-            collision.bounceClean(ball, player)
+            collision.bounceRelative(ball, player)
+            -- Move out of bat along normal to prevent sticking
             local closestX = math.max(player.x, math.min(ball.x, player.x + player.width))
             local closestY = math.max(player.y, math.min(ball.y, player.y + player.height))
             local nx = ball.x - closestX
@@ -62,7 +57,7 @@ function love.update(dt)
             ball.x = closestX + nx / len * (ball.radius + 1)
             ball.y = closestY + ny / len * (ball.radius + 1)
         elseif collision.sweptCollision(ball, opponent) then
-            collision.bounceClean(ball, opponent)
+            collision.bounceRelative(ball, opponent)
             local closestX = math.max(opponent.x, math.min(ball.x, opponent.x + opponent.width))
             local closestY = math.max(opponent.y, math.min(ball.y, opponent.y + opponent.height))
             local nx = ball.x - closestX
@@ -73,7 +68,7 @@ function love.update(dt)
             ball.y = closestY + ny / len * (ball.radius + 1)
         end
 
-        -- Голы
+        -- Scoring
         if ball.x + ball.radius < 0 then
             opponentScore = opponentScore + 1
             ball:reset()
@@ -93,6 +88,7 @@ end
 function love.draw()
     love.graphics.clear(COLOR_BG)
     love.graphics.setColor(COLOR_FG)
+    -- Dotted center line
     for y = 0, WINDOW_HEIGHT, BALL_SIZE * 2 do
         love.graphics.rectangle('fill', WINDOW_WIDTH / 2 - 2, y, 4, BALL_SIZE)
     end
@@ -108,7 +104,7 @@ function love.draw()
     end
     love.graphics.setColor(0.6,0.6,0.6)
     love.graphics.print(
-        "Left: WASD | Right: Arrows | Start: Space | Quit: Esc",
+        "Left: WASD | Right: AI | Start: Space | Quit: Esc",
         20, WINDOW_HEIGHT - 28
     )
     love.graphics.setColor(COLOR_FG)
@@ -126,6 +122,16 @@ function love.keypressed(key)
     end
 end
 
+ 
+      
+            
+            
+            
+    
+   
+
+
+ 
     
          
             
