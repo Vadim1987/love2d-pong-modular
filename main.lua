@@ -19,13 +19,11 @@ end
 
 function love.update(dt)
     if gameState == "play" then
-        -- WASD: W/S = depth (table axis, forward/back), A/D = width (screen horizontal)
         local vdir, hdir = 0, 0
         if love.keyboard.isDown('w') then vdir = -1 elseif love.keyboard.isDown('s') then vdir = 1 end
         if love.keyboard.isDown('a') then hdir = -1 elseif love.keyboard.isDown('d') then hdir = 1 end
         player:update(dt, vdir, hdir)
 
-        -- Restrict player to near half only
         player.x = math.max(BAT_MIN_X, math.min(BAT_MAX_X, player.x))
         player.y = math.max(BAT_MIN_Y, math.min(BAT_MAX_Y, player.y))
 
@@ -40,7 +38,6 @@ function love.update(dt)
             ball.dy = -ball.dy
         end
 
-        -- Paddle collision (player side only)
         if collision.sweptCollision(ball, player) then
             collision.bounceClean(ball, player)
             local closestX = math.max(player.x, math.min(ball.x, player.x + player.width))
@@ -53,7 +50,6 @@ function love.update(dt)
             ball.y = closestY + ny / len * (ball.radius + 1)
         end
 
-        -- "Goal": ball crosses center or returns back (opponent/your point)
         if ball.x - ball.radius > WINDOW_WIDTH / 2 then
             opponentScore = opponentScore + 1
             ball:reset()
@@ -74,7 +70,7 @@ function love.draw()
     love.graphics.clear(COLOR_BG)
     love.graphics.setColor(COLOR_FG)
 
-    -- Draw grid on allowed movement area (player's half)
+    -- Grid (player's zone)
     for gx = 0, GRID_X do
         for gy = 0, GRID_Y do
             local fx = BAT_MIN_X + gx * ((BAT_MAX_X - BAT_MIN_X) / GRID_X)
@@ -93,16 +89,16 @@ function love.draw()
         end
     end
 
-    -- Draw player's bat (as a 3D rectangle)
+    -- Paddle (bat) as 3D rectangle
     local px1, py1 = perspective(player.x, player.y, BAT_HEIGHT_3D)
     local px2, py2 = perspective(player.x + player.width, player.y + player.height, 0)
     love.graphics.rectangle("fill", px1, py1, px2 - px1, py2 - py1)
 
-    -- Draw puck (as a circle, lower)
+    -- Puck (as circle, lower)
     local bx, by = perspective(ball.x, ball.y, PUCK_HEIGHT_3D)
     love.graphics.circle("fill", bx, by, ball.radius)
 
-    -- Scoreboard (center top)
+    -- Scoreboard
     love.graphics.print(tostring(playerScore), WINDOW_WIDTH / 2 - 40, SCORE_OFFSET_Y)
     love.graphics.print(tostring(opponentScore), WINDOW_WIDTH / 2 + 20, SCORE_OFFSET_Y)
 
@@ -129,11 +125,7 @@ function love.keypressed(key)
     end
 end
 
-     
-         
 
-    
-   
 
 
  
