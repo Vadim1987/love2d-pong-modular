@@ -29,7 +29,6 @@ function love.update(dt)
 
         ball:update(dt)
 
-        -- Walls (side bumpers)
         if ball.y - ball.radius <= BAT_MIN_Y then
             ball.y = BAT_MIN_Y + ball.radius
             ball.dy = -ball.dy
@@ -126,12 +125,9 @@ function love.keypressed(key)
 end
 
 
-
-
+       
  
-    
-         
-            
+     
       
   
   
