@@ -1,6 +1,7 @@
 function perspective(x, y, h)
+    -- Perspective projection for first-person Shufflepuck
     local xm = x - BAT_MIN_X
-    local ym = y - (BAT_MIN_Y + BAT_MAX_Y)/2
+    local ym = y - (BAT_MIN_Y + BAT_MAX_Y) / 2
     local s = PROJ_S
     local d = PROJ_D
     local cx = PROJ_CX
@@ -10,3 +11,4 @@ function perspective(x, y, h)
     local screen_y = s * (h + d / xm) + cy
     return screen_x, screen_y
 end
+
