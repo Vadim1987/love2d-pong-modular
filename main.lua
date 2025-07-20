@@ -1,4 +1,4 @@
--- Modular Pong main file
+-- Modular Pong main file (circular puck, swept collision, tangent bounce)
 require "constants"
 local Paddle = require "paddle"
 local Ball = require "ball"
@@ -9,10 +9,10 @@ local player, opponent, ball
 local playerScore, opponentScore
 local gameState = "start"
 
--- Set opponent control mode here: "ai" or "manual"
-local opponentControl = "manual"   -- Change to "ai" for single-player mode
-local aiStrategy = AI.perfect      -- Default AI, used if opponentControl == "ai"
-local bounceFunc = collision.bounceSimple
+-- Switch between "ai" or "manual" for opponent
+local opponentControl = "manual"
+local aiStrategy = AI.perfect
+local bounceFunc = collision.bounceTangent
 
 function love.load()
     love.window.setMode(WINDOW_WIDTH, WINDOW_HEIGHT)
@@ -26,13 +26,13 @@ end
 
 function love.update(dt)
     if gameState == "play" then
-        -- Player 1 movement (Q/A)
+        -- Player 1 controls (Q/A)
         local dir = 0
         if love.keyboard.isDown('q') then dir = -1
         elseif love.keyboard.isDown('a') then dir = 1 end
         player:update(dt, dir)
 
-        -- Opponent movement: AI or manual control
+        -- Opponent controls: AI or manual (arrows)
         local opponentDir = 0
         if opponentControl == "ai" then
             opponentDir = aiStrategy(ball, opponent)
@@ -42,35 +42,50 @@ function love.update(dt)
         end
         opponent:update(dt, opponentDir)
 
-        -- Ball update
+        -- Ball update (track previous position for swept collision)
         ball:update(dt)
 
-        -- Top/bottom wall collision
-        if ball.y <= 0 then
-            ball.y = 0
+        -- Top/bottom wall collision for circle
+        if ball.y - ball.radius <= 0 then
+            ball.y = ball.radius
             ball.dy = -ball.dy
-        elseif ball.y + ball.size >= WINDOW_HEIGHT then
-            ball.y = WINDOW_HEIGHT - ball.size
+        elseif ball.y + ball.radius >= WINDOW_HEIGHT then
+            ball.y = WINDOW_HEIGHT - ball.radius
             ball.dy = -ball.dy
         end
 
-        -- Paddle collision
-        if collision.checkCollision(ball, player) then
-            bounceFunc(ball, player)
-            ball.x = player.x + player.width -- Avoid sticking
-        elseif collision.checkCollision(ball, opponent) then
-            bounceFunc(ball, opponent)
-            ball.x = opponent.x - ball.size
+        -- Swept paddle collision: check along trajectory to prevent tunneling
+        if collision.sweptCollision(ball, player) then
+            collision.bounceTangent(ball, player)
+            -- Move out along normal to prevent sticking
+            local closestX = math.max(player.x, math.min(ball.x, player.x + player.width))
+            local closestY = math.max(player.y, math.min(ball.y, player.y + player.height))
+            local nx = ball.x - closestX
+            local ny = ball.y - closestY
+            local len = math.sqrt(nx*nx + ny*ny)
+            if len == 0 then len = 1 end
+            ball.x = closestX + nx / len * (ball.radius + 1)
+            ball.y = closestY + ny / len * (ball.radius + 1)
+        elseif collision.sweptCollision(ball, opponent) then
+            collision.bounceTangent(ball, opponent)
+            local closestX = math.max(opponent.x, math.min(ball.x, opponent.x + opponent.width))
+            local closestY = math.max(opponent.y, math.min(ball.y, opponent.y + opponent.height))
+            local nx = ball.x - closestX
+            local ny = ball.y - closestY
+            local len = math.sqrt(nx*nx + ny*ny)
+            if len == 0 then len = 1 end
+            ball.x = closestX + nx / len * (ball.radius + 1)
+            ball.y = closestY + ny / len * (ball.radius + 1)
         end
 
-        -- Scoring
-        if ball.x < 0 then
+        -- Scoring: check if ball left the screen (circle logic)
+        if ball.x + ball.radius < 0 then
             opponentScore = opponentScore + 1
             ball:reset()
             if opponentScore >= WIN_SCORE then
                 gameState = "done"
             end
-        elseif ball.x + ball.size > WINDOW_WIDTH then
+        elseif ball.x - ball.radius > WINDOW_WIDTH then
             playerScore = playerScore + 1
             ball:reset()
             if playerScore >= WIN_SCORE then
@@ -81,32 +96,32 @@ function love.update(dt)
 end
 
 function love.draw()
-    -- Draw background
+    -- Background
     love.graphics.clear(COLOR_BG)
     love.graphics.setColor(COLOR_FG)
 
-    -- Draw center line
+    -- Center dotted line
     for y = 0, WINDOW_HEIGHT, BALL_SIZE * 2 do
         love.graphics.rectangle('fill', WINDOW_WIDTH / 2 - 2, y, 4, BALL_SIZE)
     end
 
-    -- Draw paddles and ball
+    -- Paddles & puck
     player:draw()
     opponent:draw()
     ball:draw()
 
-    -- Draw scores
+    -- Scores
     love.graphics.print(tostring(playerScore), WINDOW_WIDTH / 2 - 60, SCORE_OFFSET_Y)
     love.graphics.print(tostring(opponentScore), WINDOW_WIDTH / 2 + 40, SCORE_OFFSET_Y)
 
-    -- Game state text
+    -- Game state messages
     if gameState == "done" then
         love.graphics.printf("Game Over", 0, WINDOW_HEIGHT / 2 - 16, WINDOW_WIDTH, 'center')
     elseif gameState == "start" then
         love.graphics.printf("Press Space to Start", 0, WINDOW_HEIGHT / 2 - 16, WINDOW_WIDTH, 'center')
     end
 
-    -- Info about controls
+    -- Controls help
     love.graphics.setColor(0.6,0.6,0.6)
     love.graphics.print(
         "Left: Q/A | Right: Up/Down | Start: Space | Quit: Esc",
@@ -126,6 +141,14 @@ function love.keypressed(key)
         love.event.quit()
     end
 end
+
+    
+           
+      
+           
+       
+
+
 
            
        
