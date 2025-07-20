@@ -1,37 +1,33 @@
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 600
 
--- Paddle (bat) settings
-PADDLE_WIDTH = 18
+PADDLE_WIDTH = 20
 PADDLE_HEIGHT = 60
-PADDLE_SPEED = 280 -- Both axes
+PADDLE_SPEED = 280
 
--- Grid for movement limits (player zone only)
 GRID_X = 8
 GRID_Y = 3
-BAT_MIN_X = 40
-BAT_MAX_X = (WINDOW_WIDTH / 2) - PADDLE_WIDTH - 20
-BAT_MIN_Y = (WINDOW_HEIGHT / 2) - 100
-BAT_MAX_Y = (WINDOW_HEIGHT / 2) + 100 - PADDLE_HEIGHT
 
--- Ball (puck) settings
-BALL_SIZE = 16 -- radius
-BALL_SPEED_X = 220
-BALL_SPEED_Y = 120
+BAT_MIN_X = 90
+BAT_MAX_X = 320
+BAT_MIN_Y = 150
+BAT_MAX_Y = 400
 
--- Perspective rendering constants
-PROJ_S = 300
-PROJ_D = 650
+BALL_SIZE = 14
+BALL_SPEED_X = 180
+BALL_SPEED_Y = 110
+
+-- Projection "just right" for this table
+PROJ_S = 130
+PROJ_D = 180
 PROJ_CX = WINDOW_WIDTH / 2
-PROJ_CY = 0
-BAT_HEIGHT_3D = 40 -- bat in 3D (drawn as 3D bar)
-PUCK_HEIGHT_3D = 15 -- puck is lower
+PROJ_CY = 70
+BAT_HEIGHT_3D = 32
+PUCK_HEIGHT_3D = 10
 
--- Score
 WIN_SCORE = 10
 SCORE_OFFSET_Y = 40
 
--- Colors
 COLOR_BG = {0, 0, 0}
 COLOR_FG = {1, 1, 1}
 
