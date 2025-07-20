@@ -1,7 +1,10 @@
+-- Collision: circle-vs-rect swept collision & bat-relative reflection
+
 local function clamp(val, min, max)
     return math.max(min, math.min(max, val))
 end
 
+-- Swept collision (sampled across the frame)
 local function sweptCollision(ball, paddle)
     local steps = 8
     for i=1,steps do
@@ -20,26 +23,32 @@ local function sweptCollision(ball, paddle)
     return false
 end
 
--- Чистое зеркальное отражение по нормали, без добавления скорости ракетки!
-local function bounceClean(ball, paddle)
+-- Invert ball velocity relative to the bat's frame of reference
+local function bounceRelative(ball, paddle)
     local closestX = clamp(ball.x, paddle.x, paddle.x + paddle.width)
     local closestY = clamp(ball.y, paddle.y, paddle.y + paddle.height)
     local nx = ball.x - closestX
     local ny = ball.y - closestY
     local len = math.sqrt(nx * nx + ny * ny)
-    if len == 0 then nx,ny = 1,0 else nx,ny = nx/len, ny/len end
-    local vDotN = ball.dx * nx + ball.dy * ny
-    ball.dx = ball.dx - 2 * vDotN * nx
-    ball.dy = ball.dy - 2 * vDotN * ny
+    if len == 0 then nx, ny = 1, 0 else nx, ny = nx/len, ny/len end
+    -- Relative velocity
+    local rvx = ball.dx - (paddle.hspeed or 0)
+    local rvy = ball.dy - (paddle.vspeed or 0)
+    local vDotN = rvx * nx + rvy * ny
+    rvx = rvx - 2 * vDotN * nx
+    rvy = rvy - 2 * vDotN * ny
+    -- Transform back to world frame
+    ball.dx = rvx + (paddle.hspeed or 0)
+    ball.dy = rvy + (paddle.vspeed or 0)
 end
 
 return {
     sweptCollision = sweptCollision,
-    bounceClean = bounceClean
+    bounceRelative = bounceRelative
 }
 
-
-
+   
+   
   
    
 
