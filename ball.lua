@@ -1,3 +1,5 @@
+-- Ball object (now circular, with frame tracking for swept collision)
+
 local Ball = {}
 Ball.__index = Ball
 
@@ -35,4 +37,5 @@ end
 
 return Ball
 
+  
 
