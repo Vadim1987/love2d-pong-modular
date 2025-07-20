@@ -1,5 +1,3 @@
--- Paddle module: supports both axes and perspective rendering in main.lua
-
 local Paddle = {}
 Paddle.__index = Paddle
 
@@ -12,7 +10,6 @@ function Paddle:create(x, y)
     return paddle
 end
 
--- vdir: depth (table axis), hdir: width (screen horizontal)
 function Paddle:update(dt, vdir, hdir)
     if vdir ~= 0 then
         self.x = math.max(BAT_MIN_X, math.min(BAT_MAX_X, self.x + vdir * PADDLE_SPEED * dt))
@@ -24,4 +21,4 @@ end
 
 return Paddle
 
-       
+
