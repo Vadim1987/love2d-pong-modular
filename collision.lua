@@ -1,5 +1,3 @@
--- Circle vs rectangle collision for player's paddle only (no opponent)
-
 local function clamp(val, min, max)
     return math.max(min, math.min(max, val))
 end
@@ -38,6 +36,7 @@ return {
     sweptCollision = sweptCollision,
     bounceClean = bounceClean
 }
+
 
          
  
