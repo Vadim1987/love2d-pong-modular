@@ -1,19 +1,22 @@
+-- Paddle object with both vertical and horizontal movement
+
 local Paddle = {}
 Paddle.__index = Paddle
 
-function Paddle:create(x, y, isPlayer, isOpponent)
+function Paddle:create(x, y, min_x, max_x)
     local paddle = setmetatable({}, self)
     paddle.x = x
     paddle.y = y
     paddle.width = PADDLE_WIDTH
     paddle.height = PADDLE_HEIGHT
-    paddle.vspeed = 0
-    paddle.hspeed = 0
-    paddle.isPlayer = isPlayer or false
-    paddle.isOpponent = isOpponent or false
+    paddle.vspeed = 0      -- vertical speed
+    paddle.hspeed = 0      -- horizontal speed
+    paddle.min_x = min_x   -- horizontal limits for this bat
+    paddle.max_x = max_x
     return paddle
 end
 
+-- vdir: vertical direction (-1 up, 1 down), hdir: horizontal (-1 left, 1 right)
 function Paddle:update(dt, vdir, hdir)
     -- Vertical
     if vdir ~= 0 then
@@ -22,18 +25,10 @@ function Paddle:update(dt, vdir, hdir)
     else
         self.vspeed = 0
     end
-    -- Horizontal (до центра поля)
+    -- Horizontal
     if hdir ~= 0 then
-        local minX, maxX
-        if self.isPlayer then
-            minX = 0
-            maxX = BAT_MAX_X
-        elseif self.isOpponent then
-            minX = BAT_MIN_X_OPP
-            maxX = WINDOW_WIDTH - PADDLE_WIDTH
-        end
         self.hspeed = PADDLE_HSPEED * hdir
-        self.x = math.max(minX, math.min(maxX, self.x + self.hspeed * dt))
+        self.x = math.max(self.min_x, math.min(self.max_x, self.x + self.hspeed * dt))
     else
         self.hspeed = 0
     end
@@ -44,4 +39,7 @@ function Paddle:draw()
 end
 
 return Paddle
+
+      
+       
 
