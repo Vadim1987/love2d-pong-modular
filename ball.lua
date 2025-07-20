@@ -1,5 +1,3 @@
--- Ball module: center spawn, tracks prev position for swept collision
-
 local Ball = {}
 Ball.__index = Ball
 
@@ -32,6 +30,10 @@ function Ball:update(dt)
 end
 
 return Ball
+
+  
+
+
 
 
 
