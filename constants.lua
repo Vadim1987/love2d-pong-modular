@@ -1,35 +1,50 @@
-WINDOW_WIDTH = 800
+-- Window
+WINDOW_WIDTH  = 800
 WINDOW_HEIGHT = 600
 
--- Paddle (bat) settings: slim, long
-PADDLE_WIDTH = 12
-PADDLE_HEIGHT = 48
-PADDLE_SPEED = 320
+-- Player paddle (bat) : slim & proportional for Shufflepuck feel
+PADDLE_WIDTH  = 14
+PADDLE_HEIGHT = 52
+PADDLE_SPEED  = 340     -- movement speed along both local axes
 
--- Player zone and grid
-GRID_X = 8
-GRID_Y = 3
-BAT_MIN_X = 100
-BAT_MAX_X = 350
-BAT_MIN_Y = 140
-BAT_MAX_Y = 460
+-- Player movement zone (the "near half" of the table)
+-- X here is the depth axis (away from the player), Y is lateral
+-- We restrict player to this box.
+ZONE_MIN_X = 100
+ZONE_MAX_X = 360
+ZONE_MIN_Y = 140
+ZONE_MAX_Y = 460 - PADDLE_HEIGHT
 
--- Ball (puck) settings: small and fast
-BALL_SIZE = 9
-BALL_SPEED_X = 170
-BALL_SPEED_Y = 100
+-- Grid (8 x 3) drawn over the allowed zone
+GRID_COLS = 8
+GRID_ROWS = 3
 
--- Perspective for proper table look
-PROJ_S = 115
-PROJ_D = 165
-PROJ_CX = WINDOW_WIDTH / 2
-PROJ_CY = 80
-BAT_HEIGHT_3D = 20
-PUCK_HEIGHT_3D = 7
+-- Ball (puck)
+BALL_RADIUS  = 10
+BALL_SPEED_X = 190
+BALL_SPEED_Y = 115
 
-WIN_SCORE = 10
-SCORE_OFFSET_Y = 36
+-- Perspective constants (formula: f(x,y) = s * (ym + d/xm, h + d/xm) + c)
+-- xm = (x - ORIGIN_X), ym = (y - FIELD_CENTER_Y)
+PROJ_SCALE = 120     -- s
+PROJ_DIST  = 170     -- d : "distance to projection plane"
+PROJ_CX    = WINDOW_WIDTH / 2  -- c.x (center of view horizontally)
+PROJ_CY    = 70                -- c.y (slightly down from top for aesthetic)
 
+-- Origin offsets for perspective
+ORIGIN_X        = ZONE_MIN_X   -- where xm = 0 (player's eye X plane)
+FIELD_CENTER_Y  = (ZONE_MIN_Y + ZONE_MAX_Y) / 2
+
+-- Heights (h) for objects
+BAT_HEIGHT_3D  = 24
+PUCK_HEIGHT_3D = 10
+
+-- Scoring
+WIN_SCORE      = 10
+SCORE_OFFSET_Y = 34
+
+-- Colors
 COLOR_BG = {0, 0, 0}
 COLOR_FG = {1, 1, 1}
+
 
