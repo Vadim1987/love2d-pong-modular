@@ -1,15 +1,13 @@
--- Ball module: now circular and with previous position tracking
-
 local Ball = {}
 Ball.__index = Ball
 
 function Ball:create()
     local ball = setmetatable({}, self)
-    ball.radius = BALL_SIZE         -- Now "BALL_SIZE" is radius!
+    ball.radius = BALL_SIZE
     ball.x = WINDOW_WIDTH / 2
     ball.y = WINDOW_HEIGHT / 2
-    ball.dx = math.random(2) == 1 and BALL_SPEED_X or -BALL_SPEED_X
-    ball.dy = (math.random() - 0.5) * 2 * BALL_SPEED_Y
+    ball.dx = BALL_SPEED_X * (math.random(2) == 1 and 1 or -1)
+    ball.dy = BALL_SPEED_Y * (math.random(2) == 1 and 1 or -1)
     ball.prev_x = ball.x
     ball.prev_y = ball.y
     return ball
@@ -18,8 +16,8 @@ end
 function Ball:reset()
     self.x = WINDOW_WIDTH / 2
     self.y = WINDOW_HEIGHT / 2
-    self.dx = math.random(2) == 1 and BALL_SPEED_X or -BALL_SPEED_X
-    self.dy = (math.random() - 0.5) * 2 * BALL_SPEED_Y
+    self.dx = BALL_SPEED_X * (math.random(2) == 1 and 1 or -1)
+    self.dy = BALL_SPEED_Y * (math.random(2) == 1 and 1 or -1)
     self.prev_x = self.x
     self.prev_y = self.y
 end
@@ -36,3 +34,5 @@ function Ball:draw()
 end
 
 return Ball
+
+
