@@ -39,4 +39,13 @@ function AI.novice(ball, paddle)
     end
 end
 
+function AI.manual(ball, paddle)
+    -- Manual mode: movement handled via keyboard input in main.lua
+    return 0
+end
+
 return AI
+
+
+
+     
