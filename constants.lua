@@ -1,43 +1,33 @@
-WINDOW_WIDTH  = 800
+-- constants.lua
+-- Game window
+WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 600
 
--- Paddle (bat) settings
-PADDLE_WIDTH  = 14
-PADDLE_HEIGHT = 52
-PADDLE_SPEED  = 340
+-- Paddle (bat) parameters
+PADDLE_WIDTH = 10
+PADDLE_HEIGHT = 60
+PADDLE_SPEED = 300     -- Vertical movement
+PADDLE_HSPEED = 200    -- Horizontal movement
 
--- Player movement zone (near half of the table)
-ZONE_MIN_X = 100
-ZONE_MAX_X = 360
-ZONE_MIN_Y = 140
-ZONE_MAX_Y = 460 - PADDLE_HEIGHT
+-- Horizontal limits (not beyond half of the table)
+BAT_MIN_X = 0
+BAT_MAX_X = (WINDOW_WIDTH / 2) - PADDLE_WIDTH - 10
+OPP_MIN_X = (WINDOW_WIDTH / 2) + 10
+OPP_MAX_X = WINDOW_WIDTH - PADDLE_WIDTH
 
--- Grid
-GRID_COLS = 8
-GRID_ROWS = 3
+-- Ball (ellipse radii)
+BALL_RADIUS_X = 16   -- Horizontal semi-axis (longer)
+BALL_RADIUS_Y = 10   -- Vertical semi-axis (shorter)
 
--- Ball (puck)
-BALL_RADIUS  = 10
-BALL_SPEED_X = 190
-BALL_SPEED_Y = 115
+BALL_SPEED_X = 240
+BALL_SPEED_Y = 120
 
--- Perspective projection constants
-PROJ_SCALE = 120
-PROJ_DIST  = 170
-PROJ_CX    = WINDOW_WIDTH  / 2
-PROJ_CY    = 80
+-- Score
+WIN_SCORE = 10
 
--- Origin offsets for projection
-ORIGIN_X       = ZONE_MIN_X
-FIELD_CENTER_Y = (ZONE_MIN_Y + ZONE_MAX_Y) / 2
-
--- Heights for 3D effect
-BAT_HEIGHT_3D  = 24
-PUCK_HEIGHT_3D = 10
-
--- Scoring
-WIN_SCORE      = 10
-SCORE_OFFSET_Y = 34
+-- Offsets and display
+PADDLE_OFFSET_X = 30
+SCORE_OFFSET_Y = 40
 
 -- Colors
 COLOR_BG = {0, 0, 0}
