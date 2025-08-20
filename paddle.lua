@@ -4,12 +4,13 @@ local Perspective = require("perspective")
 local Paddle = {}
 Paddle.__index = Paddle
 
-function Paddle.new(x, y, widthY, heightH)
+-- widthY — width по оси Y (на столе), depthX — width по оси X (в глубину)
+function Paddle.new(x, y, widthY, depthX)
     local self = setmetatable({}, Paddle)
     self.x = x or 160
     self.y = y or WINDOW_HEIGHT / 2
-    self.w = (widthY or 52) * 2
-    self.h = heightH or 68
+    self.w = (widthY or 52) * 2   
+    self.d = depthX or 36         
     self.moveSpeed = 320
     return self
 end
@@ -20,15 +21,12 @@ function Paddle:update(dt, inputY)
     end
 end
 
--- colors
-local COL_SHADOW   = {0, 0, 0, 0.32}
-local COL_SIDE_L   = {0.62, 0.72, 0.82, 1.0}
-local COL_SIDE_R   = {0.82, 0.90, 0.98, 1.0}
-local COL_RIM      = {0.68, 0.86, 0.96, 1.0}  
-local COL_TOP      = {0.96, 0.98, 1.00, 1.0}
-local COL_OUTLINE  = {0, 0, 0, 1.0}           
+-- Colors (B/W minimalism)
+local COL_FILL    = {0.96, 0.98, 1.00, 1.0}
+local COL_OUTLINE = {0.00, 0.00, 0.00, 1.0}
+local COL_SHADOW  = {0.00, 0.00, 0.00, 0.25}
 
--- additional projection function
+-- quick "radius" estimate for shadow ellipse on table
 local function rx_proj_at(x, y, h, r)
     local px1 = Perspective.project(x, y - r, h)
     local px2 = Perspective.project(x, y + r, h)
@@ -40,57 +38,42 @@ local function ry_proj_at(x, y, h, r)
     return math.max(1, math.abs(py2 - py1))
 end
 
+-- Flat trapezoid: rectangle in the world (x..x+d, y±w/2) => looks like a trapezoid on the screen
 function Paddle:drawPerspective()
     local halfY = self.w * 0.5
+    local xN = self.x            -- (near)
+    local xF = self.x + self.d   -- (far)
 
-    local lbx, lby = Perspective.project(self.x, self.y - halfY, 0)
-    local rbx, rby = Perspective.project(self.x, self.y + halfY, 0)
-    local ltx, lty = Perspective.project(self.x, self.y - halfY, self.h)
-    local rtx, rty = Perspective.project(self.x, self.y + halfY, self.h)
+    -- shadow (barely noticeable), at floor level h=0
+    do
+        local bx, by = Perspective.project(self.x, self.y, 0)
+        local rx = rx_proj_at(self.x, self.y, 0, halfY)
+        local ry = ry_proj_at(self.x, self.y, 0, self.d * 0.5)
+        love.graphics.setColor(COL_SHADOW)
+        love.graphics.ellipse("fill", bx, by + ry*0.12, rx*1.02, ry*1.06)
+    end
 
-    local bx, by = Perspective.project(self.x, self.y, 0)
+    -- 4 angles in the plane of the table (h=0)
+    local nLx, nLy = Perspective.project(xN, self.y - halfY, 0)
+    local nRx, nRy = Perspective.project(xN, self.y + halfY, 0)
+    local fRx, fRy = Perspective.project(xF, self.y + halfY, 0)
+    local fLx, fLy = Perspective.project(xF, self.y - halfY, 0)
 
-    -- shadow
-    local rx = rx_proj_at(self.x, self.y, 0, halfY)
-    local ry = ry_proj_at(self.x, self.y, 0, self.h * 0.5)
-    love.graphics.setColor(COL_SHADOW)
-    love.graphics.ellipse("fill", bx, by + ry*0.18, rx*1.10, ry*1.18)
+    -- filling
+    love.graphics.setColor(COL_FILL)
+    love.graphics.polygon("fill", nLx,nLy, nRx,nRy, fRx,fRy, fLx,fLy)
 
-    -- side walls
-    local tx, ty = Perspective.project(self.x, self.y, self.h)
-    love.graphics.setColor(COL_SIDE_L)
-    love.graphics.polygon("fill", lbx, lby, ltx, lty, tx, ty, bx, by)
-    love.graphics.setColor(COL_SIDE_R)
-    love.graphics.polygon("fill", bx, by, tx, ty, rtx, rty, rbx, rby)
-
-    -- inner panel
-    local insetY = math.max(3, self.w * 0.08)
-    local insetH = math.max(3, self.h * 0.18)
-    local halfY_in = math.max(1, halfY - insetY)
-    local h_in     = math.max(0, self.h - insetH)
-
-    local ilbx, ilby = Perspective.project(self.x, self.y - halfY_in, 0)
-    local irbx, irby = Perspective.project(self.x, self.y + halfY_in, 0)
-    local iltx, ilty = Perspective.project(self.x, self.y - halfY_in, h_in)
-    local irtx, irty = Perspective.project(self.x, self.y + halfY_in, h_in)
-
-    love.graphics.setColor(COL_TOP)
-    love.graphics.polygon("fill", iltx, ilty, irtx, irty, irbx, irby, ilbx, ilby)
-
-    -- blue thick rim
-    love.graphics.setColor(COL_RIM)
-    love.graphics.setLineWidth(6)
-    love.graphics.setLineJoin("miter")
-    love.graphics.polygon("line", ltx, lty, rtx, rty, rbx, rby, lbx, lby)
-
-    -- black thin outline on top
+    -- outline (sharp, no gradients)
     love.graphics.setColor(COL_OUTLINE)
-    love.graphics.setLineWidth(1.6)
-    love.graphics.polygon("line", ltx, lty, rtx, rty, rbx, rby, lbx, lby)
-    love.graphics.polygon("line", iltx, ilty, irtx, irty, irbx, irby, ilbx, ilby)
+    love.graphics.setLineWidth(2)
+    love.graphics.polygon("line", nLx,nLy, nRx,nRy, fRx,fRy, fLx,fLy)
 end
 
 return Paddle
+
+   
+
+  
 
 
     
