@@ -12,9 +12,9 @@ local uiFont, uiFontBig, uiFontSmall
 local GRID_LINE_ALPHA   = 0.50
 local GRID_LINE_WIDTH   = 1.2
 local BRIGHT_LINE_WIDTH = 2.4
-local FLOOR_HEIGHT      = 26   
+local FLOOR_HEIGHT      = 26   -- grid/floor sits at lower edge level
 
--- Table --
+-- Table geometry
 do
     local orig_x_near = 160
     local orig_x_far  = 560
@@ -60,7 +60,7 @@ end
 local scorePlayer, scoreEnemy = 0, 0
 local state, serveDir, serveTimer = "play", 1, 0
 
---  SIDES  --
+-- ---- rails & grid (unchanged baseline) ----
 local function drawSideRails()
     local RAIL_TOP   = {0.70, 0.85, 0.95, 0.85}
     local RAIL_SIDE  = {0.35, 0.50, 0.60, 0.85}
@@ -126,7 +126,7 @@ local function drawSideRails()
     end
 end
 
--- 8×3 grid
+-- 8×3 grid on FLOOR_HEIGHT
 local function drawPaddleZoneGridPerspective()
     local y0, y1 = TABLE.y_min, TABLE.y_max
     local DEPTH, WIDTH = 8, 3
@@ -204,7 +204,7 @@ local function drawPaddleZoneGridPerspective()
     end
 end
 
--- collision
+-- ---- simple collisions on the table plane (unchanged) ----
 local function collidePaddleSwept(puck, paddle, dt)
     local goingLeft  = puck.dx < 0 and paddle.x <= puck.x
     local goingRight = puck.dx > 0 and paddle.x >= puck.x
@@ -261,7 +261,7 @@ function love.load()
 
     local px1, px2 = zone_bounds_player()
     local ex1, ex2 = zone_bounds_enemy()
-    -- widthY, depthX: flat trapezoid
+    -- widthY, depthX: flat trapezoids
     player = Paddle.new(px1 + 40, (TABLE.y_min + TABLE.y_max)/2, 52, 42)
     enemy  = Paddle.new(ex2 - 40, (TABLE.y_min + TABLE.y_max)/2, 48, 38)
 
@@ -271,7 +271,7 @@ end
 function love.update(dt)
     if dt > 0.033 then dt = 0.033 end
 
-    -- movement: depth (W/S, ↑/↓) and width (A/D, ←/→)
+    -- controls: depth (W/S, ↑/↓) and across (A/D, ←/→)
     local k = love.keyboard.isDown
     local moveDepth = (k("w") and 1 or 0) + (k("s") and -1 or 0)
     moveDepth = moveDepth + (k("up") and 1 or 0) + (k("down") and -1 or 0)
@@ -281,7 +281,7 @@ function love.update(dt)
     moveWidth = moveWidth + (k("left") and -1 or 0) + (k("right") and 1 or 0)
     player.y = player.y + moveWidth * PLAYER_SPEED_Y * dt
 
-    -- boundaries players zone
+    -- bounds for player
     do
         local halfY = (player.w or 40) * 0.5
         if player.y < TABLE.y_min + halfY then player.y = TABLE.y_min + halfY end
@@ -293,7 +293,7 @@ function love.update(dt)
         if player.x > rightB then player.x = rightB end
     end
 
-    -- enemy demo logic
+    -- enemy demo
     enemy.x = (function() local ex1,ex2=zone_bounds_enemy(); return ex1+(ex2-ex1)*0.75 end)()
     enemy.y = (TABLE.y_min + TABLE.y_max)/2 + math.sin(love.timer.getTime()*1.2) * (TABLE.y_max - TABLE.y_min) * 0.28
     do
@@ -333,17 +333,28 @@ function love.update(dt)
 end
 
 function love.draw()
-    -- background: бортики + grid
+    -- 1) floor: rails + grid
     drawPaddleZoneGridPerspective()
 
-    -- actors: far → near (по x)
-    local actors = {
-        {x = player.x, draw = function() player:drawPerspective() end},
-        {x = enemy.x,  draw = function() enemy:drawPerspective()  end},
-        {x = puck.x,   draw = function() puck:drawPerspective()   end},
+    -- 2) base actors on the table (sorted by depth X for occlusion)
+    local bases = {
+        {x = player.x, draw = function() player:drawBasePerspective() end},
+        {x = enemy.x,  draw = function() enemy:drawBasePerspective()  end},
+        {x = puck.x,   draw = function() puck:drawBaseShadow()       end}, -- only shadow on base
     }
-    table.sort(actors, function(a, b) return a.x > b.x end)
-    for _, a in ipairs(actors) do a.draw() end
+    table.sort(bases, function(a,b) return a.x > b.x end)
+    for _, a in ipairs(bases) do a.draw() end
+
+    -- 3) puck TOP plane at H_PUCK (distinct color)
+    puck:drawTopAt(H_PUCK, COLOR_PUCK_TOP_FILL, COLOR_PUCK_TOP_OUTLINE)
+
+    -- 4) bats TOP planes at H_BAT (3× puck height, third color)
+    local batTops = {
+        {x = player.x, draw = function() player:drawTopOnly(H_BAT, COLOR_BAT_TOP_FILL, COLOR_BAT_TOP_OUTLINE) end},
+        {x = enemy.x,  draw = function() enemy:drawTopOnly (H_BAT, COLOR_BAT_TOP_FILL, COLOR_BAT_TOP_OUTLINE) end},
+    }
+    table.sort(batTops, function(a,b) return a.x > b.x end)
+    for _, a in ipairs(batTops) do a.draw() end
 
     -- score
     love.graphics.setFont(uiFontBig)
@@ -375,6 +386,34 @@ function love.keypressed(key)
         serveTimer = 0.7
     end
 end
+
+ 
+
+   
+
+
+   
+      
+
+
+
+ 
+        
+       
+
+ 
+   
+   
+
+   
+
+
+  
+ 
+
+   
+
+ 
 
 
        
