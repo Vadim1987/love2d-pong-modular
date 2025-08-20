@@ -4,18 +4,19 @@ local Perspective = require("perspective")
 local Ball = {}
 Ball.__index = Ball
 
--- Form settings (horiz/vert "radii" in table coordinates)
+-- Shape tuning in table-space (affects ellipse aspect in projection)
 local KX = 1.00
 local KY = 0.60
 
 function Ball.new(x, y, dx, dy, r)
     local self = setmetatable({}, Ball)
-    self.x = x or 320
-    self.y = y or WINDOW_HEIGHT/2
+    self.x  = x  or 320
+    self.y  = y  or WINDOW_HEIGHT / 2
     self.dx = dx or 220
     self.dy = dy or 130
     self.r  = r  or 18
-    self.h  = 0           -- EVERYTHING is in the plane of the table
+    -- Base is at table level; top is drawn separately at H_PUCK
+    self.h  = 0
     return self
 end
 
@@ -24,6 +25,7 @@ function Ball:update(dt)
     self.y = self.y + self.dy * dt
 end
 
+-- projective ellipse radii at (x,y,h)
 local function rx_proj_at(x, y, h, r)
     local px1 = Perspective.project(x, y - r, h)
     local px2 = Perspective.project(x, y + r, h)
@@ -35,24 +37,33 @@ local function ry_proj_at(x, y, h, r)
     return math.max(1, math.abs(py2 - py1)) * KY
 end
 
-function Ball:drawPerspective()
-    local bx, by = Perspective.project(self.x, self.y, self.h)
-    local rx = rx_proj_at(self.x, self.y, self.h, self.r)
-    local ry = ry_proj_at(self.x, self.y, self.h, self.r)
-
-    -- light "contact" shadow so the outline doesn't get lost on the tile
+-- Base pass: only a soft contact shadow on the floor (no side faces)
+function Ball:drawBaseShadow()
+    local bx, by = Perspective.project(self.x, self.y, 0)
+    local rx = rx_proj_at(self.x, self.y, 0, self.r)
+    local ry = ry_proj_at(self.x, self.y, 0, self.r)
     love.graphics.setColor(0, 0, 0, 0.20)
     love.graphics.ellipse("fill", bx, by + ry*0.10, rx*1.02, ry*1.04)
+end
 
-    -- puck ellipse (fill + outline)
-    love.graphics.setColor(0.96, 0.98, 1.00, 1.0)
+-- Top pass: puck’s top ellipse at provided height (H_PUCK)
+function Ball:drawTopAt(height, fillCol, outlineCol)
+    local bx, by = Perspective.project(self.x, self.y, height)
+    local rx = rx_proj_at(self.x, self.y, height, self.r)
+    local ry = ry_proj_at(self.x, self.y, height, self.r)
+
+    love.graphics.setColor((fillCol or {0.96,0.98,1.0,1.0}))
     love.graphics.ellipse("fill", bx, by, rx, ry)
-    love.graphics.setColor(0.08, 0.10, 0.12, 0.95)
+
+    love.graphics.setColor((outlineCol or {0.08,0.10,0.12,0.95}))
     love.graphics.setLineWidth(1.6)
     love.graphics.ellipse("line", bx, by, rx, ry)
 end
 
 return Ball
+
+
+
 
 
 
