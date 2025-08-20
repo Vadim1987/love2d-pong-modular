@@ -27,5 +27,10 @@ function Perspective.project(x, y, h)
     return px, py
 end
 
+-- Getter for screen center X (used to decide left/right side visibility)
+function Perspective.center_x()
+    return C_X
+end
+
 return Perspective
 
