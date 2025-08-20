@@ -8,11 +8,11 @@ local Paddle      = require("paddle")
 local player, enemy, puck
 local uiFont, uiFontBig, uiFontSmall
 
---  visual constants 
+-- visual constants
 local GRID_LINE_ALPHA   = 0.50
 local GRID_LINE_WIDTH   = 1.2
 local BRIGHT_LINE_WIDTH = 2.4
-local FLOOR_HEIGHT      = 26   -- grid/floor sits at lower edge level
+local FLOOR_HEIGHT      = 26   -- rails/grid sit at lower edge level
 
 -- Table geometry
 do
@@ -60,7 +60,7 @@ end
 local scorePlayer, scoreEnemy = 0, 0
 local state, serveDir, serveTimer = "play", 1, 0
 
--- ---- rails & grid (unchanged baseline) ----
+-- ---- rails & grid ----
 local function drawSideRails()
     local RAIL_TOP   = {0.70, 0.85, 0.95, 0.85}
     local RAIL_SIDE  = {0.35, 0.50, 0.60, 0.85}
@@ -168,6 +168,7 @@ local function drawPaddleZoneGridPerspective()
             local yy = y0 + (y1 - y0) * (j / DEPTH)
             local b1x, b1y = Perspective.project(inNear, yy, FLOOR_HEIGHT)
             local b2x, b2y = Perspective.project(inFar,  yy, FLOOR_HEIGHT)
+            -- FIX: b2b -> b2y
             love.graphics.line(b1x, b1y, b2x, b2y)
         end
 
@@ -204,26 +205,26 @@ local function drawPaddleZoneGridPerspective()
     end
 end
 
--- ---- simple collisions on the table plane (unchanged) ----
-local function collidePaddleSwept(puck, paddle, dt)
-    local goingLeft  = puck.dx < 0 and paddle.x <= puck.x
-    local goingRight = puck.dx > 0 and paddle.x >= puck.x
+-- ---- simple collisions on the table plane (unchanged from iter2) ----
+local function collidePaddleSwept(p, paddle, dt)
+    local goingLeft  = p.dx < 0 and paddle.x <= p.x
+    local goingRight = p.dx > 0 and paddle.x >= p.x
     if not (goingLeft or goingRight) then return false end
 
-    local t = (paddle.x - puck.x) / puck.dx
+    local t = (paddle.x - p.x) / p.dx
     if t < 0 or t > dt then return false end
 
-    local y_at_hit = puck.y + puck.dy * t
+    local y_at_hit = p.y + p.dy * t
     local halfY = (paddle.w or 40) * 0.5
-    local hit = (y_at_hit >= (paddle.y - halfY - puck.r)) and (y_at_hit <= (paddle.y + halfY + puck.r))
+    local hit = (y_at_hit >= (paddle.y - halfY - p.r)) and (y_at_hit <= (paddle.y + halfY + p.r))
     if not hit then return false end
 
-    puck.x, puck.y = paddle.x, y_at_hit
-    puck.dx = -puck.dx
+    p.x, p.y = paddle.x, y_at_hit
+    p.dx = -p.dx
     local offset = (y_at_hit - paddle.y) / halfY
-    puck.dy = puck.dy + offset * 220
-    puck.dx, puck.dy = puck.dx * 1.04, puck.dy * 1.04
-    if goingLeft then puck.x = paddle.x + 1 else puck.x = paddle.x - 1 end
+    p.dy = p.dy + offset * 220
+    p.dx, p.dy = p.dx * 1.04, p.dy * 1.04
+    if goingLeft then p.x = paddle.x + 1 else p.x = paddle.x - 1 end
     return true
 end
 
@@ -261,7 +262,7 @@ function love.load()
 
     local px1, px2 = zone_bounds_player()
     local ex1, ex2 = zone_bounds_enemy()
-    -- widthY, depthX: flat trapezoids
+    -- widthY, depthX
     player = Paddle.new(px1 + 40, (TABLE.y_min + TABLE.y_max)/2, 52, 42)
     enemy  = Paddle.new(ex2 - 40, (TABLE.y_min + TABLE.y_max)/2, 48, 38)
 
@@ -271,7 +272,7 @@ end
 function love.update(dt)
     if dt > 0.033 then dt = 0.033 end
 
-    -- controls: depth (W/S, ↑/↓) and across (A/D, ←/→)
+    -- controls
     local k = love.keyboard.isDown
     local moveDepth = (k("w") and 1 or 0) + (k("s") and -1 or 0)
     moveDepth = moveDepth + (k("up") and 1 or 0) + (k("down") and -1 or 0)
@@ -333,22 +334,59 @@ function love.update(dt)
 end
 
 function love.draw()
-    -- 1) floor: rails + grid
+    -- ========== LAYER 1: baseline white ==========
     drawPaddleZoneGridPerspective()
 
-    -- 2) base actors on the table (sorted by depth X for occlusion)
+    -- base footprints on table (bats) + bottom ellipse of puck
     local bases = {
         {x = player.x, draw = function() player:drawBasePerspective() end},
         {x = enemy.x,  draw = function() enemy:drawBasePerspective()  end},
-        {x = puck.x,   draw = function() puck:drawBaseShadow()       end}, -- only shadow on base
     }
     table.sort(bases, function(a,b) return a.x > b.x end)
     for _, a in ipairs(bases) do a.draw() end
 
-    -- 3) puck TOP plane at H_PUCK (distinct color)
+    puck:drawBottomEllipse()
+    puck:drawBaseShadow()
+
+    -- ========== LAYER 2 (part A): puck wall + bat sides before puck top ==========
+    puck:drawWallToTop(H_PUCK, COLOR_PUCK_TOP_FILL, COLOR_PUCK_TOP_OUTLINE)
+
+    local function collectSides(bat)
+        local out = {}
+        local sides = bat:visibleSides()
+        for _, s in ipairs(sides) do
+            table.insert(out, {bat=bat, id=s.id, depthX=s.depthX})
+        end
+        return out
+    end
+
+    local sidesAll = {}
+    for _, bat in ipairs({player, enemy}) do
+        local list = collectSides(bat)
+        for _, it in ipairs(list) do table.insert(sidesAll, it) end
+    end
+
+    local sidesBefore, sidesAfter = {}, {}
+    for _, s in ipairs(sidesAll) do
+        if puck.x < s.depthX then table.insert(sidesBefore, s)
+        else table.insert(sidesAfter, s) end
+    end
+
+    table.sort(sidesBefore, function(a,b) return a.depthX > b.depthX end)
+    for _, s in ipairs(sidesBefore) do
+        s.bat:drawSide(s.id, H_BAT, COLOR_BAT_SIDE_FILL, COLOR_BAT_SIDE_OUTLINE)
+    end
+
+    -- ========== LAYER 3 (part 1): puck top ==========
     puck:drawTopAt(H_PUCK, COLOR_PUCK_TOP_FILL, COLOR_PUCK_TOP_OUTLINE)
 
-    -- 4) bats TOP planes at H_BAT (3× puck height, third color)
+    -- ========== LAYER 2 (part B): remaining bat sides (after puck top) ==========
+    table.sort(sidesAfter, function(a,b) return a.depthX > b.depthX end)
+    for _, s in ipairs(sidesAfter) do
+        s.bat:drawSide(s.id, H_BAT, COLOR_BAT_SIDE_FILL, COLOR_BAT_SIDE_OUTLINE)
+    end
+
+    -- ========== LAYER 3 (part 2): bat tops ==========
     local batTops = {
         {x = player.x, draw = function() player:drawTopOnly(H_BAT, COLOR_BAT_TOP_FILL, COLOR_BAT_TOP_OUTLINE) end},
         {x = enemy.x,  draw = function() enemy:drawTopOnly (H_BAT, COLOR_BAT_TOP_FILL, COLOR_BAT_TOP_OUTLINE) end},
@@ -386,6 +424,26 @@ function love.keypressed(key)
         serveTimer = 0.7
     end
 end
+
+
+
+ 
+
+
+
+
+   
+    
+      
+              
+        
+  
+
+
+
+    
+  
+
 
  
 
