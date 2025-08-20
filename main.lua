@@ -12,14 +12,12 @@ local uiFont, uiFontBig, uiFontSmall
 local GRID_LINE_ALPHA   = 0.50
 local GRID_LINE_WIDTH   = 1.2
 local BRIGHT_LINE_WIDTH = 2.4
-local FLOOR_HEIGHT      = 26   -- сетка/пол лежат на нижнем уровне бортика
+local FLOOR_HEIGHT      = 26   
 
 -- Table --
 do
-    -- width as original shufflle puck
     local orig_x_near = 160
     local orig_x_far  = 560
-    -- depth 
     local orig_y_min  = WINDOW_HEIGHT * 0.20
     local orig_y_max  = WINDOW_HEIGHT * 0.80
     local midY   = (orig_y_min + orig_y_max) / 2
@@ -41,23 +39,20 @@ local PLAYER_SPEED_Y = 320 -- across (Y axis)  A/D, ←/→
 local PLAYER_SPEED_X = 260 -- depth (X axis)   W/S, ↑/↓
 
 -- zones/grid
-local OUTER_MARGIN = 12     -- total side clearance from outer edges (used only on far sides)
-local INNER_MARGIN = 12     -- grid inset from its zone (but we push the near edges to the walls)
-local CENTER_GAP   = 96     -- gap between sections
+local OUTER_MARGIN = 12
+local INNER_MARGIN = 12
+local CENTER_GAP   = 96
 
--- ASYMMETRICAL zone boundaries:
--- player: near edge = right at the wall, far edge left with a margin
 local function zone_bounds_player()
     local halfGap = CENTER_GAP * 0.5
-    local x1 = TABLE.x_near                -- без OUTER_MARGIN: press against the side
+    local x1 = TABLE.x_near
     local x2 = X_MID - halfGap - OUTER_MARGIN
     return x1, x2
 end
--- enemy: near edge = at the gap, far edge = right at the wall
 local function zone_bounds_enemy()
     local halfGap = CENTER_GAP * 0.5
     local x1 = X_MID + halfGap + OUTER_MARGIN
-    local x2 = TABLE.x_far                 -- без OUTER_MARGIN: press against the wall
+    local x2 = TABLE.x_far
     return x1, x2
 end
 
@@ -67,20 +62,19 @@ local state, serveDir, serveTimer = "play", 1, 0
 
 --  SIDES  --
 local function drawSideRails()
-    local RAIL_TOP   = {0.70, 0.85, 0.95, 0.85} -- blue top shelf (z=0)
-    local RAIL_SIDE  = {0.35, 0.50, 0.60, 0.85} -- inner vertical wall (0..FLOOR_HEIGHT)
+    local RAIL_TOP   = {0.70, 0.85, 0.95, 0.85}
+    local RAIL_SIDE  = {0.35, 0.50, 0.60, 0.85}
     local EDGE_WHITE = {1, 1, 1, 1}
 
-    local wNear = 140   -- width of the shelf at the near edge
-    local wFar  = 60    -- at the far edge (narrowing)
+    local wNear = 140
+    local wFar  = 60
 
-    -- LEFT side (along TABLE.y_min)
+    -- LEFT side
     do
         local y_in  = TABLE.y_min
         local y_out_near = y_in - wNear
         local y_out_far  = y_in - wFar
 
-        -- top inclined shelf (z=0)
         local a1x,a1y = Perspective.project(TABLE.x_near, y_in,        0)
         local a2x,a2y = Perspective.project(TABLE.x_far,  y_in,        0)
         local a3x,a3y = Perspective.project(TABLE.x_far,  y_out_far,   0)
@@ -88,7 +82,6 @@ local function drawSideRails()
         love.graphics.setColor(RAIL_TOP)
         love.graphics.polygon("fill", a1x,a1y, a2x,a2y, a3x,a3y, a4x,a4y)
 
-        -- inner vertical wall: 0..FLOOR_HEIGHT
         local s1x,s1y = Perspective.project(TABLE.x_near, y_in, 0)
         local s2x,s2y = Perspective.project(TABLE.x_far,  y_in, 0)
         local s3x,s3y = Perspective.project(TABLE.x_far,  y_in, FLOOR_HEIGHT)
@@ -96,16 +89,15 @@ local function drawSideRails()
         love.graphics.setColor(RAIL_SIDE)
         love.graphics.polygon("fill", s1x,s1y, s2x,s2y, s3x,s3y, s4x,s4y)
 
-        -- white edges
         love.graphics.setColor(EDGE_WHITE)
         love.graphics.setLineWidth(BRIGHT_LINE_WIDTH)
-        love.graphics.line(a4x,a4y, a3x,a3y) -- outer edge of the shelf
-        love.graphics.line(a1x,a1y, a2x,a2y) -- inner edge of the shelf
-        love.graphics.line(s1x,s1y, s4x,s4y) -- vertical edges
+        love.graphics.line(a4x,a4y, a3x,a3y)
+        love.graphics.line(a1x,a1y, a2x,a2y)
+        love.graphics.line(s1x,s1y, s4x,s4y)
         love.graphics.line(s2x,s2y, s3x,s3y)
     end
 
-    -- RIGHT side (along TABLE.y_max)
+    -- RIGHT side
     do
         local y_in  = TABLE.y_max
         local y_out_near = y_in + wNear
@@ -134,16 +126,14 @@ local function drawSideRails()
     end
 end
 
---  Section grids (8×3) + perimeters and edges of the central strip --
+-- 8×3 grid
 local function drawPaddleZoneGridPerspective()
     local y0, y1 = TABLE.y_min, TABLE.y_max
     local DEPTH, WIDTH = 8, 3
     local fillA1, fillA2 = 0.10, 0.06
 
-    -- side rails under the grid
     drawSideRails()
 
-    -- drawZone with flags: alignNear/alignFar — should the grid be pressed against the zone boundary without INNER_MARGIN
     local function drawZone(xNear, xFar, alignNear, alignFar)
         local inNear = xNear + (alignNear and 0 or INNER_MARGIN)
         local inFar  = xFar  - (alignFar  and 0 or INNER_MARGIN)
@@ -153,11 +143,9 @@ local function drawPaddleZoneGridPerspective()
         for i = 0, WIDTH do xs[i] = inNear + (inFar - inNear) * (i / WIDTH) end
         for j = 0, DEPTH do ys[j] = y0 + (y1 - y0) * (j / DEPTH) end
 
-        -- tiles (ON THE FLOOR: z = FLOOR_HEIGHT)
         for j = 0, DEPTH - 1 do
             for i = 0, WIDTH - 1 do
-                love.graphics.setColor(COLOR_FG[1], COLOR_FG[2], COLOR_FG[3],
-                                       ((i + j) % 2 == 0) and fillA1 or fillA2)
+                love.graphics.setColor(1,1,1, ((i + j) % 2 == 0) and fillA1 or fillA2)
                 local xL, xR = xs[i], xs[i+1]
                 local yN, yF = ys[j], ys[j+1]
                 local p1x, p1y = Perspective.project(xL, yN, FLOOR_HEIGHT)
@@ -168,8 +156,7 @@ local function drawPaddleZoneGridPerspective()
             end
         end
 
-        -- inner grid (ON THE FLOOR)
-        love.graphics.setColor(COLOR_FG[1], COLOR_FG[2], COLOR_FG[3], GRID_LINE_ALPHA)
+        love.graphics.setColor(1,1,1, GRID_LINE_ALPHA)
         love.graphics.setLineWidth(GRID_LINE_WIDTH)
         for i = 1, WIDTH - 1 do
             local xx = inNear + (inFar - inNear) * (i / WIDTH)
@@ -184,7 +171,6 @@ local function drawPaddleZoneGridPerspective()
             love.graphics.line(b1x, b1y, b2x, b2y)
         end
 
-        -- bright perimeter of the section (ON THE FLOOR)
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.setLineWidth(BRIGHT_LINE_WIDTH)
         local z1x, z1y = Perspective.project(inNear, y0, FLOOR_HEIGHT)
@@ -201,12 +187,9 @@ local function drawPaddleZoneGridPerspective()
 
     local px1, px2 = zone_bounds_player()
     local ex1, ex2 = zone_bounds_enemy()
-    -- player: press the near edge to the side
     local pInNear, pInFar = drawZone(px1, px2, true,  false)
-    -- enemy: press the far edge to the side
     local eInNear, eInFar = drawZone(ex1, ex2, false, true)
 
-    -- edges of the central strip (ON THE FLOOR) — as they were
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.setLineWidth(BRIGHT_LINE_WIDTH)
     if pInFar then
@@ -221,7 +204,7 @@ local function drawPaddleZoneGridPerspective()
     end
 end
 
--- Game logic / collisions -- 
+-- collision
 local function collidePaddleSwept(puck, paddle, dt)
     local goingLeft  = puck.dx < 0 and paddle.x <= puck.x
     local goingRight = puck.dx > 0 and paddle.x >= puck.x
@@ -232,7 +215,7 @@ local function collidePaddleSwept(puck, paddle, dt)
 
     local y_at_hit = puck.y + puck.dy * t
     local halfY = (paddle.w or 40) * 0.5
-    local hit = (y_at_hit >= paddle.y - halfY - puck.r) and (y_at_hit <= paddle.y + halfY + puck.r)
+    local hit = (y_at_hit >= (paddle.y - halfY - puck.r)) and (y_at_hit <= (paddle.y + halfY + puck.r))
     if not hit then return false end
 
     puck.x, puck.y = paddle.x, y_at_hit
@@ -269,7 +252,6 @@ local function resetPuck(dir)
     puck.dy = (love.math.random() < 0.5 and -1 or 1) * baseSpeedY
 end
 
---  LÖVE --
 function love.load()
     love.window.setMode(WINDOW_WIDTH, WINDOW_HEIGHT, {resizable=false})
     love.graphics.setBackgroundColor(COLOR_BG)
@@ -279,17 +261,17 @@ function love.load()
 
     local px1, px2 = zone_bounds_player()
     local ex1, ex2 = zone_bounds_enemy()
+    -- widthY, depthX: flat trapezoid
     player = Paddle.new(px1 + 40, (TABLE.y_min + TABLE.y_max)/2, 52, 42)
     enemy  = Paddle.new(ex2 - 40, (TABLE.y_min + TABLE.y_max)/2, 48, 38)
 
     puck   = Ball.new((TABLE.x_near + TABLE.x_far)/2, (TABLE.y_min + TABLE.y_max)/2, 220, 130, 18)
-    puck.thickness = 18
 end
 
 function love.update(dt)
     if dt > 0.033 then dt = 0.033 end
 
-    -- control (inverted axes)
+    -- movement: depth (W/S, ↑/↓) and width (A/D, ←/→)
     local k = love.keyboard.isDown
     local moveDepth = (k("w") and 1 or 0) + (k("s") and -1 or 0)
     moveDepth = moveDepth + (k("up") and 1 or 0) + (k("down") and -1 or 0)
@@ -299,7 +281,7 @@ function love.update(dt)
     moveWidth = moveWidth + (k("left") and -1 or 0) + (k("right") and 1 or 0)
     player.y = player.y + moveWidth * PLAYER_SPEED_Y * dt
 
-    -- clamps the player zone
+    -- boundaries players zone
     do
         local halfY = (player.w or 40) * 0.5
         if player.y < TABLE.y_min + halfY then player.y = TABLE.y_min + halfY end
@@ -311,7 +293,7 @@ function love.update(dt)
         if player.x > rightB then player.x = rightB end
     end
 
-    -- enemy (demo)
+    -- enemy demo logic
     enemy.x = (function() local ex1,ex2=zone_bounds_enemy(); return ex1+(ex2-ex1)*0.75 end)()
     enemy.y = (TABLE.y_min + TABLE.y_max)/2 + math.sin(love.timer.getTime()*1.2) * (TABLE.y_max - TABLE.y_min) * 0.28
     do
@@ -325,7 +307,6 @@ function love.update(dt)
         if enemy.x > rightB then enemy.x = rightB end
     end
 
-    -- FSM / puck
     if state == "over" then
         centerAndStopPuck(); return
     elseif state == "serve" then
@@ -352,32 +333,32 @@ function love.update(dt)
 end
 
 function love.draw()
-    -- sides + nets (all at floor level) + perimeters
+    -- background: бортики + grid
     drawPaddleZoneGridPerspective()
 
-    -- paddles and puck
-    love.graphics.setColor(COLOR_FG)
-    player:drawPerspective()
-    enemy:drawPerspective()
-    puck:drawPerspective()
+    -- actors: far → near (по x)
+    local actors = {
+        {x = player.x, draw = function() player:drawPerspective() end},
+        {x = enemy.x,  draw = function() enemy:drawPerspective()  end},
+        {x = puck.x,   draw = function() puck:drawPerspective()   end},
+    }
+    table.sort(actors, function(a, b) return a.x > b.x end)
+    for _, a in ipairs(actors) do a.draw() end
 
-    -- scoreboard
+    -- score
     love.graphics.setFont(uiFontBig)
     love.graphics.setColor(1,1,1,1)
     love.graphics.print(string.format("%d:%d", scorePlayer, scoreEnemy), 20, 14)
 
-    -- GAME OVER screen
     if state == "over" then
         love.graphics.setColor(0, 0, 0, 0.45)
         love.graphics.rectangle("fill", 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
-
         love.graphics.setColor(1, 1, 1, 1)
         love.graphics.setFont(uiFontBig)
         local title = "GAME OVER"
         local tw = uiFontBig:getWidth(title)
         local th = uiFontBig:getHeight()
         love.graphics.print(title, (WINDOW_WIDTH - tw) / 2, (WINDOW_HEIGHT - th) / 2 - 28)
-
         love.graphics.setFont(uiFontSmall)
         local hint = "Press SPACE to restart"
         local hw = uiFontSmall:getWidth(hint)
@@ -394,6 +375,33 @@ function love.keypressed(key)
         serveTimer = 0.7
     end
 end
+
+
+       
+     
+      
+
+
+     
+      
+
+   
+    
+
+
+
+  
+
+   
+
+   
+
+ 
+
+
+
+       
+
 
 
   
