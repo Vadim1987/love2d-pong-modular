@@ -1,431 +1,215 @@
 -- main.lua
-require("constants")
+require "constants"
+local Paddle      = require "paddle"
+local Ball        = require "ball"
+local AI          = require "ai"
+local collision   = require "collision"
+local Perspective = require "perspective"
 
-local Perspective = require("perspective")
-local Ball        = require("ball")
-local Paddle      = require("paddle")
+local player, opponent, ball
+local playerScore, opponentScore
+local gameState = "start"
+local aiStrategy = AI.clever
 
-local player, enemy, puck
-local uiFont, uiFontBig, uiFontSmall
+-- ---------- helpers: table ------------------------------------
 
--- visual constants
-local GRID_LINE_ALPHA   = 0.50
-local GRID_LINE_WIDTH   = 1.2
-local BRIGHT_LINE_WIDTH = 2.4
-local FLOOR_HEIGHT      = 26   -- rails/grid sit at lower edge level
-
--- Table geometry
-do
-    local orig_x_near = 160
-    local orig_x_far  = 560
-    local orig_y_min  = WINDOW_HEIGHT * 0.20
-    local orig_y_max  = WINDOW_HEIGHT * 0.80
-    local midY   = (orig_y_min + orig_y_max) / 2
-    local half_h = (orig_y_max - orig_y_min) / 2 * 1.5
-    TABLE = {
-        x_near = orig_x_near,
-        x_far  = orig_x_far,
-        y_min  = midY - half_h,
-        y_max  = midY + half_h,
-    }
+local function drawTableOutline()
+    local spec = Perspective.tableSpec()
+    local P = spec.trapezoid
+    love.graphics.setColor(COLOR_FG)
+    love.graphics.setLineWidth(2.4)
+    love.graphics.polygon("line",
+        P.bl.x, P.bl.y, P.br.x, P.br.y, P.tr.x, P.tr.y, P.tl.x, P.tl.y
+    )
 end
 
-local X_MID      = (TABLE.x_near + TABLE.x_far) / 2
-local GOAL_DEPTH = 8
-local WIN_SCORE  = 10
+-- === HORIZONTAL dotted line EXACTLY IN THE MIDDLE OF THE VISIBLE TABLE ===
+-- We are looking for such a depth x_mid, where scanY (projection line) is exactly
+-- between the top and bottom edges of the trapezoid. We draw dashes from left to right.
+local function drawCenterLineHorizontal()
+    local spec = Perspective.tableSpec()
+    local P = spec.trapezoid
+    local T = spec.size
 
--- speeds
-local PLAYER_SPEED_Y = 320 -- across (Y axis)  A/D, ←/→
-local PLAYER_SPEED_X = 260 -- depth (X axis)   W/S, ↑/↓
+    -- screen Y top/bottom edges table
+    local bottomY = (P.bl.y + P.br.y) * 0.5
+    local topY    = (P.tl.y + P.tr.y) * 0.5
+    local scanY_target = 0.5 * (bottomY + topY)
 
--- zones/grid
-local OUTER_MARGIN = 12
-local INNER_MARGIN = 12
-local CENTER_GAP   = 96
-
-local function zone_bounds_player()
-    local halfGap = CENTER_GAP * 0.5
-    local x1 = TABLE.x_near
-    local x2 = X_MID - halfGap - OUTER_MARGIN
-    return x1, x2
-end
-local function zone_bounds_enemy()
-    local halfGap = CENTER_GAP * 0.5
-    local x1 = X_MID + halfGap + OUTER_MARGIN
-    local x2 = TABLE.x_far
-    return x1, x2
-end
-
--- score/state
-local scorePlayer, scoreEnemy = 0, 0
-local state, serveDir, serveTimer = "play", 1, 0
-
--- ---- rails & grid ----
-local function drawSideRails()
-    local RAIL_TOP   = {0.70, 0.85, 0.95, 0.85}
-    local RAIL_SIDE  = {0.35, 0.50, 0.60, 0.85}
-    local EDGE_WHITE = {1, 1, 1, 1}
-
-    local wNear = 140
-    local wFar  = 60
-
-    -- LEFT side
-    do
-        local y_in  = TABLE.y_min
-        local y_out_near = y_in - wNear
-        local y_out_far  = y_in - wFar
-
-        local a1x,a1y = Perspective.project(TABLE.x_near, y_in,        0)
-        local a2x,a2y = Perspective.project(TABLE.x_far,  y_in,        0)
-        local a3x,a3y = Perspective.project(TABLE.x_far,  y_out_far,   0)
-        local a4x,a4y = Perspective.project(TABLE.x_near, y_out_near,  0)
-        love.graphics.setColor(RAIL_TOP)
-        love.graphics.polygon("fill", a1x,a1y, a2x,a2y, a3x,a3y, a4x,a4y)
-
-        local s1x,s1y = Perspective.project(TABLE.x_near, y_in, 0)
-        local s2x,s2y = Perspective.project(TABLE.x_far,  y_in, 0)
-        local s3x,s3y = Perspective.project(TABLE.x_far,  y_in, FLOOR_HEIGHT)
-        local s4x,s4y = Perspective.project(TABLE.x_near, y_in, FLOOR_HEIGHT)
-        love.graphics.setColor(RAIL_SIDE)
-        love.graphics.polygon("fill", s1x,s1y, s2x,s2y, s3x,s3y, s4x,s4y)
-
-        love.graphics.setColor(EDGE_WHITE)
-        love.graphics.setLineWidth(BRIGHT_LINE_WIDTH)
-        love.graphics.line(a4x,a4y, a3x,a3y)
-        love.graphics.line(a1x,a1y, a2x,a2y)
-        love.graphics.line(s1x,s1y, s4x,s4y)
-        love.graphics.line(s2x,s2y, s3x,s3y)
+    -- function: return scanY for depth fraction t
+    local function scanY_at_t(t)
+        local x = T.d * t
+        local _, y = Perspective.project(x, 0, 0)
+        return y
     end
 
-    -- RIGHT side
-    do
-        local y_in  = TABLE.y_max
-        local y_out_near = y_in + wNear
-        local y_out_far  = y_in + wFar
-
-        local b1x,b1y = Perspective.project(TABLE.x_near, y_in,        0)
-        local b2x,b2y = Perspective.project(TABLE.x_far,  y_in,        0)
-        local b3x,b3y = Perspective.project(TABLE.x_far,  y_out_far,   0)
-        local b4x,b4y = Perspective.project(TABLE.x_near, y_out_near,  0)
-        love.graphics.setColor(RAIL_TOP)
-        love.graphics.polygon("fill", b1x,b1y, b2x,b2y, b3x,b3y, b4x,b4y)
-
-        local t1x,t1y = Perspective.project(TABLE.x_near, y_in, 0)
-        local t2x,t2y = Perspective.project(TABLE.x_far,  y_in, 0)
-        local t3x,t3y = Perspective.project(TABLE.x_far,  y_in, FLOOR_HEIGHT)
-        local t4x,t4y = Perspective.project(TABLE.x_near, y_in, FLOOR_HEIGHT)
-        love.graphics.setColor(RAIL_SIDE)
-        love.graphics.polygon("fill", t1x,t1y, t2x,t2y, t3x,t3y, t4x,t4y)
-
-        love.graphics.setColor(EDGE_WHITE)
-        love.graphics.setLineWidth(BRIGHT_LINE_WIDTH)
-        love.graphics.line(b1x,b1y, b2x,b2y)
-        love.graphics.line(b4x,b4y, b3x,b3y)
-        love.graphics.line(t1x,t1y, t4x,t4y)
-        love.graphics.line(t2x,t2y, t3x,t3y)
-    end
-end
-
--- 8×3 grid on FLOOR_HEIGHT
-local function drawPaddleZoneGridPerspective()
-    local y0, y1 = TABLE.y_min, TABLE.y_max
-    local DEPTH, WIDTH = 8, 3
-    local fillA1, fillA2 = 0.10, 0.06
-
-    drawSideRails()
-
-    local function drawZone(xNear, xFar, alignNear, alignFar)
-        local inNear = xNear + (alignNear and 0 or INNER_MARGIN)
-        local inFar  = xFar  - (alignFar  and 0 or INNER_MARGIN)
-        if inFar <= inNear then return end
-
-        local xs, ys = {}, {}
-        for i = 0, WIDTH do xs[i] = inNear + (inFar - inNear) * (i / WIDTH) end
-        for j = 0, DEPTH do ys[j] = y0 + (y1 - y0) * (j / DEPTH) end
-
-        for j = 0, DEPTH - 1 do
-            for i = 0, WIDTH - 1 do
-                love.graphics.setColor(1,1,1, ((i + j) % 2 == 0) and fillA1 or fillA2)
-                local xL, xR = xs[i], xs[i+1]
-                local yN, yF = ys[j], ys[j+1]
-                local p1x, p1y = Perspective.project(xL, yN, FLOOR_HEIGHT)
-                local p2x, p2y = Perspective.project(xR, yN, FLOOR_HEIGHT)
-                local p3x, p3y = Perspective.project(xR, yF, FLOOR_HEIGHT)
-                local p4x, p4y = Perspective.project(xL, yF, FLOOR_HEIGHT)
-                love.graphics.polygon("fill", p1x,p1y, p2x,p2y, p3x,p3y, p4x,p4y)
-            end
+    -- binary search t, so that scanY coincides with the middle
+    local lo, hi = 0.0, 1.0
+    for _ = 1, 24 do
+        local mid = 0.5 * (lo + hi)
+        if scanY_at_t(mid) > scanY_target then
+            lo = mid
+        else
+            hi = mid
         end
-
-        love.graphics.setColor(1,1,1, GRID_LINE_ALPHA)
-        love.graphics.setLineWidth(GRID_LINE_WIDTH)
-        for i = 1, WIDTH - 1 do
-            local xx = inNear + (inFar - inNear) * (i / WIDTH)
-            local a1x, a1y = Perspective.project(xx, y0, FLOOR_HEIGHT)
-            local a2x, a2y = Perspective.project(xx, y1, FLOOR_HEIGHT)
-            love.graphics.line(a1x, a1y, a2x, a2y)
-        end
-        for j = 1, DEPTH - 1 do
-            local yy = y0 + (y1 - y0) * (j / DEPTH)
-            local b1x, b1y = Perspective.project(inNear, yy, FLOOR_HEIGHT)
-            local b2x, b2y = Perspective.project(inFar,  yy, FLOOR_HEIGHT)
-            -- FIX: b2b -> b2y
-            love.graphics.line(b1x, b1y, b2x, b2y)
-        end
-
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.setLineWidth(BRIGHT_LINE_WIDTH)
-        local z1x, z1y = Perspective.project(inNear, y0, FLOOR_HEIGHT)
-        local z2x, z2y = Perspective.project(inFar,  y0, FLOOR_HEIGHT)
-        local z3x, z3y = Perspective.project(inFar,  y1, FLOOR_HEIGHT)
-        local z4x, z4y = Perspective.project(inNear, y1, FLOOR_HEIGHT)
-        love.graphics.line(z1x, z1y, z2x, z2y)
-        love.graphics.line(z2x, z2y, z3x, z3y)
-        love.graphics.line(z3x, z3y, z4x, z4y)
-        love.graphics.line(z4x, z4y, z1x, z1y)
-
-        return inNear, inFar
     end
+    local t_mid = 0.5 * (lo + hi)
+    local x_mid = T.d * t_mid
 
-    local px1, px2 = zone_bounds_player()
-    local ex1, ex2 = zone_bounds_enemy()
-    local pInNear, pInFar = drawZone(px1, px2, true,  false)
-    local eInNear, eInFar = drawZone(ex1, ex2, false, true)
-
-    love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.setLineWidth(BRIGHT_LINE_WIDTH)
-    if pInFar then
-        local a1x, a1y = Perspective.project(pInFar, y0, FLOOR_HEIGHT)
-        local a2x, a2y = Perspective.project(pInFar, y1, FLOOR_HEIGHT)
-        love.graphics.line(a1x, a1y, a2x, a2y)
-    end
-    if eInNear then
-        local b1x, b1y = Perspective.project(eInNear, y0, FLOOR_HEIGHT)
-        local b2x, b2y = Perspective.project(eInNear, y1, FLOOR_HEIGHT)
-        love.graphics.line(b1x, b1y, b2x, b2y)
+    -- draw a dotted line along the WIDTH (axis across / logical
+    local dash = 28
+    local gap  = 16
+    love.graphics.setColor(COLOR_FG)
+    love.graphics.setLineWidth(2)
+    for y = 0, T.w - dash, dash + gap do
+        local x1, y1 = Perspective.project(x_mid, y, 0)
+        local x2, y2 = Perspective.project(x_mid, y + dash, 0)
+        love.graphics.line(x1, y1, x2, y2)
     end
 end
 
--- ---- simple collisions on the table plane (unchanged from iter2) ----
-local function collidePaddleSwept(p, paddle, dt)
-    local goingLeft  = p.dx < 0 and paddle.x <= p.x
-    local goingRight = p.dx > 0 and paddle.x >= p.x
-    if not (goingLeft or goingRight) then return false end
-
-    local t = (paddle.x - p.x) / p.dx
-    if t < 0 or t > dt then return false end
-
-    local y_at_hit = p.y + p.dy * t
-    local halfY = (paddle.w or 40) * 0.5
-    local hit = (y_at_hit >= (paddle.y - halfY - p.r)) and (y_at_hit <= (paddle.y + halfY + p.r))
-    if not hit then return false end
-
-    p.x, p.y = paddle.x, y_at_hit
-    p.dx = -p.dx
-    local offset = (y_at_hit - paddle.y) / halfY
-    p.dy = p.dy + offset * 220
-    p.dx, p.dy = p.dx * 1.04, p.dy * 1.04
-    if goingLeft then p.x = paddle.x + 1 else p.x = paddle.x - 1 end
-    return true
-end
-
-local function bounceWallsY(p)
-    if p.y - p.r < TABLE.y_min then p.y = TABLE.y_min + p.r; p.dy = -p.dy
-    elseif p.y + p.r > TABLE.y_max then p.y = TABLE.y_max - p.r; p.dy = -p.dy end
-end
-
-local function goalSide(p)
-    if p.x <= (TABLE.x_near - GOAL_DEPTH) then return -1
-    elseif p.x >= (TABLE.x_far + GOAL_DEPTH) then return 1 end
-    return 0
-end
-
-local function centerAndStopPuck()
-    puck.x = (TABLE.x_near + TABLE.x_far) / 2
-    puck.y = (TABLE.y_min  + TABLE.y_max) / 2
-    puck.dx, puck.dy = 0, 0
-end
-
-local function resetPuck(dir)
-    puck.x = (TABLE.x_near + TABLE.x_far) / 2
-    puck.y = (TABLE.y_min  + TABLE.y_max) / 2
-    local baseSpeedX, baseSpeedY = 220, 130
-    puck.dx = baseSpeedX * (dir >= 0 and 1 or -1)
-    puck.dy = (love.math.random() < 0.5 and -1 or 1) * baseSpeedY
-end
+-- --------------- LOVE callbacks ------------------------------
 
 function love.load()
-    love.window.setMode(WINDOW_WIDTH, WINDOW_HEIGHT, {resizable=false})
+    love.window.setMode(WINDOW_WIDTH, WINDOW_HEIGHT)
     love.graphics.setBackgroundColor(COLOR_BG)
-    uiFont      = love.graphics.newFont(36)
-    uiFontBig   = love.graphics.newFont(64)
-    uiFontSmall = love.graphics.newFont(22)
+    math.randomseed(os.time())
 
-    local px1, px2 = zone_bounds_player()
-    local ex1, ex2 = zone_bounds_enemy()
-    -- widthY, depthX
-    player = Paddle.new(px1 + 40, (TABLE.y_min + TABLE.y_max)/2, 52, 42)
-    enemy  = Paddle.new(ex2 - 40, (TABLE.y_min + TABLE.y_max)/2, 48, 38)
+    --Game objects (logic remains 2D)
+    player   = Paddle:create(PADDLE_OFFSET_X,
+                             (WINDOW_HEIGHT - PADDLE_HEIGHT)/2,
+                             BAT_MIN_X, BAT_MAX_X)
+    opponent = Paddle:create(WINDOW_WIDTH - PADDLE_OFFSET_X - PADDLE_WIDTH,
+                             (WINDOW_HEIGHT - PADDLE_HEIGHT)/2,
+                             OPP_MIN_X, OPP_MAX_X)
+    ball     = Ball:create()
 
-    puck   = Ball.new((TABLE.x_near + TABLE.x_far)/2, (TABLE.y_min + TABLE.y_max)/2, 220, 130, 18)
+    playerScore, opponentScore = 0, 0
 end
 
 function love.update(dt)
-    if dt > 0.033 then dt = 0.033 end
+    if gameState ~= "play" then return end
 
-    -- controls
-    local k = love.keyboard.isDown
-    local moveDepth = (k("w") and 1 or 0) + (k("s") and -1 or 0)
-    moveDepth = moveDepth + (k("up") and 1 or 0) + (k("down") and -1 or 0)
-    player.x = player.x + moveDepth * PLAYER_SPEED_X * dt
+    -- Player controls: W/S - depth (x), A/D - across (y)
+    local vdir, hdir = 0, 0
+    if love.keyboard.isDown('w') then vdir = -1 elseif love.keyboard.isDown('s') then vdir = 1 end
+    if love.keyboard.isDown('a') then hdir = -1 elseif love.keyboard.isDown('d') then hdir = 1 end
+    player:update(dt, vdir, hdir)
 
-    local moveWidth = (k("a") and -1 or 0) + (k("d") and 1 or 0)
-    moveWidth = moveWidth + (k("left") and -1 or 0) + (k("right") and 1 or 0)
-    player.y = player.y + moveWidth * PLAYER_SPEED_Y * dt
+    -- Opponent (AI)
+    local ovdir, ohdir = aiStrategy(ball, opponent)
+    opponent:update(dt, ovdir, ohdir)
 
-    -- bounds for player
-    do
-        local halfY = (player.w or 40) * 0.5
-        if player.y < TABLE.y_min + halfY then player.y = TABLE.y_min + halfY end
-        if player.y > TABLE.y_max - halfY then player.y = TABLE.y_max - halfY end
-        local px1, px2 = zone_bounds_player()
-        local leftB, rightB = px1 + INNER_MARGIN, px2 - INNER_MARGIN
-        if rightB < leftB then rightB = leftB end
-        if player.x < leftB then player.x = leftB end
-        if player.x > rightB then player.x = rightB end
+    -- Ball — 2D physics
+    ball:update(dt)
+
+    -- Bounce off top/bottom (Y axis)
+    if ball.y - ball.radius <= 0 then
+        ball.y = ball.radius
+        ball.dy = -ball.dy
+    elseif ball.y + ball.radius >= WINDOW_HEIGHT then
+        ball.y = WINDOW_HEIGHT - ball.radius
+        ball.dy = -ball.dy
     end
 
-    -- enemy demo
-    enemy.x = (function() local ex1,ex2=zone_bounds_enemy(); return ex1+(ex2-ex1)*0.75 end)()
-    enemy.y = (TABLE.y_min + TABLE.y_max)/2 + math.sin(love.timer.getTime()*1.2) * (TABLE.y_max - TABLE.y_min) * 0.28
-    do
-        local halfY = (enemy.w or 40) * 0.5
-        if enemy.y < TABLE.y_min + halfY then enemy.y = TABLE.y_min + halfY end
-        if enemy.y > TABLE.y_max - halfY then enemy.y = TABLE.y_max - halfY end
-        local ex1, ex2 = zone_bounds_enemy()
-        local leftB, rightB = ex1 + INNER_MARGIN, ex2 - INNER_MARGIN
-        if rightB < leftB then rightB = leftB end
-        if enemy.x < leftB then enemy.x = leftB end
-        if enemy.x > rightB then enemy.x = rightB end
+    -- Collisions with paddles (as in 2D, from the sides)
+    if collision.sweptCollision(ball, player) then
+        collision.bounceRelative(ball, player)
+        -- need to prevent sticking
+        local cx = math.max(player.x, math.min(ball.x, player.x + player.width))
+        local cy = math.max(player.y, math.min(ball.y, player.y + player.height))
+        local nx, ny = ball.x - cx, ball.y - cy
+        local len = math.sqrt(nx*nx + ny*ny); if len == 0 then len = 1 end
+        ball.x = cx + nx/len * (ball.radius + 1)
+        ball.y = cy + ny/len * (ball.radius + 1)
+    elseif collision.sweptCollision(ball, opponent) then
+        collision.bounceRelative(ball, opponent)
+        local cx = math.max(opponent.x, math.min(ball.x, opponent.x + opponent.width))
+        local cy = math.max(opponent.y, math.min(ball.y, opponent.y + opponent.height))
+        local nx, ny = ball.x - cx, ball.y - cy
+        local len = math.sqrt(nx*nx + ny*ny); if len == 0 then len = 1 end
+        ball.x = cx + nx/len * (ball.radius + 1)
+        ball.y = cy + ny/len * (ball.radius + 1)
     end
 
-    if state == "over" then
-        centerAndStopPuck(); return
-    elseif state == "serve" then
-        centerAndStopPuck()
-        serveTimer = serveTimer - dt
-        if serveTimer <= 0 then resetPuck(serveDir); state = "play" end
-        return
-    end
-
-    local hitP = collidePaddleSwept(puck, player, dt)
-    local hitE = collidePaddleSwept(puck, enemy,  dt)
-    if not (hitP or hitE) then puck:update(dt) end
-    bounceWallsY(puck)
-
-    local side = goalSide(puck)
-    if side ~= 0 then
-        if side == 1 then scorePlayer = scorePlayer + 1 else scoreEnemy = scoreEnemy + 1 end
-        if scorePlayer >= WIN_SCORE or scoreEnemy >= WIN_SCORE then
-            state = "over"; centerAndStopPuck()
-        else
-            state = "serve"; serveDir = side; serveTimer = 0.7
-        end
+    -- Goals
+    if ball.x + ball.radius < 0 then
+        opponentScore = opponentScore + 1
+        ball:reset()
+        if opponentScore >= WIN_SCORE then gameState = "done" end
+    elseif ball.x - ball.radius > WINDOW_WIDTH then
+        playerScore = playerScore + 1
+        ball:reset()
+        if playerScore >= WIN_SCORE then gameState = "done" end
     end
 end
 
 function love.draw()
-    -- ========== LAYER 1: baseline white ==========
-    drawPaddleZoneGridPerspective()
+    love.graphics.clear(COLOR_BG)
+    love.graphics.setColor(COLOR_FG)
 
-    -- base footprints on table (bats) + bottom ellipse of puck
-    local bases = {
-        {x = player.x, draw = function() player:drawBasePerspective() end},
-        {x = enemy.x,  draw = function() enemy:drawBasePerspective()  end},
-    }
-    table.sort(bases, function(a,b) return a.x > b.x end)
-    for _, a in ipairs(bases) do a.draw() end
+    drawTableOutline()
+    drawCenterLineHorizontal()      -- << divides the field into top/bottom
 
-    puck:drawBottomEllipse()
-    puck:drawBaseShadow()
+    player:draw()
+    opponent:draw()
+    ball:draw()
 
-    -- ========== LAYER 2 (part A): puck wall + bat sides before puck top ==========
-    puck:drawWallToTop(H_PUCK, COLOR_PUCK_TOP_FILL, COLOR_PUCK_TOP_OUTLINE)
+    -- Score/Start
+    love.graphics.print(tostring(playerScore), WINDOW_WIDTH / 2 - 60, SCORE_OFFSET_Y)
+    love.graphics.print(tostring(opponentScore), WINDOW_WIDTH / 2 + 40, SCORE_OFFSET_Y)
 
-    local function collectSides(bat)
-        local out = {}
-        local sides = bat:visibleSides()
-        for _, s in ipairs(sides) do
-            table.insert(out, {bat=bat, id=s.id, depthX=s.depthX})
-        end
-        return out
+    if gameState == "done" then
+        love.graphics.printf("Game Over", 0, WINDOW_HEIGHT / 2 - 16, WINDOW_WIDTH, 'center')
+    elseif gameState == "start" then
+        love.graphics.printf("Press Space to Start", 0, WINDOW_HEIGHT / 2 - 16, WINDOW_WIDTH, 'center')
     end
 
-    local sidesAll = {}
-    for _, bat in ipairs({player, enemy}) do
-        local list = collectSides(bat)
-        for _, it in ipairs(list) do table.insert(sidesAll, it) end
-    end
-
-    local sidesBefore, sidesAfter = {}, {}
-    for _, s in ipairs(sidesAll) do
-        if puck.x < s.depthX then table.insert(sidesBefore, s)
-        else table.insert(sidesAfter, s) end
-    end
-
-    table.sort(sidesBefore, function(a,b) return a.depthX > b.depthX end)
-    for _, s in ipairs(sidesBefore) do
-        s.bat:drawSide(s.id, H_BAT, COLOR_BAT_SIDE_FILL, COLOR_BAT_SIDE_OUTLINE)
-    end
-
-    -- ========== LAYER 3 (part 1): puck top ==========
-    puck:drawTopAt(H_PUCK, COLOR_PUCK_TOP_FILL, COLOR_PUCK_TOP_OUTLINE)
-
-    -- ========== LAYER 2 (part B): remaining bat sides (after puck top) ==========
-    table.sort(sidesAfter, function(a,b) return a.depthX > b.depthX end)
-    for _, s in ipairs(sidesAfter) do
-        s.bat:drawSide(s.id, H_BAT, COLOR_BAT_SIDE_FILL, COLOR_BAT_SIDE_OUTLINE)
-    end
-
-    -- ========== LAYER 3 (part 2): bat tops ==========
-    local batTops = {
-        {x = player.x, draw = function() player:drawTopOnly(H_BAT, COLOR_BAT_TOP_FILL, COLOR_BAT_TOP_OUTLINE) end},
-        {x = enemy.x,  draw = function() enemy:drawTopOnly (H_BAT, COLOR_BAT_TOP_FILL, COLOR_BAT_TOP_OUTLINE) end},
-    }
-    table.sort(batTops, function(a,b) return a.x > b.x end)
-    for _, a in ipairs(batTops) do a.draw() end
-
-    -- score
-    love.graphics.setFont(uiFontBig)
-    love.graphics.setColor(1,1,1,1)
-    love.graphics.print(string.format("%d:%d", scorePlayer, scoreEnemy), 20, 14)
-
-    if state == "over" then
-        love.graphics.setColor(0, 0, 0, 0.45)
-        love.graphics.rectangle("fill", 0, 0, WINDOW_WIDTH, WINDOW_HEIGHT)
-        love.graphics.setColor(1, 1, 1, 1)
-        love.graphics.setFont(uiFontBig)
-        local title = "GAME OVER"
-        local tw = uiFontBig:getWidth(title)
-        local th = uiFontBig:getHeight()
-        love.graphics.print(title, (WINDOW_WIDTH - tw) / 2, (WINDOW_HEIGHT - th) / 2 - 28)
-        love.graphics.setFont(uiFontSmall)
-        local hint = "Press SPACE to restart"
-        local hw = uiFontSmall:getWidth(hint)
-        love.graphics.print(hint, (WINDOW_WIDTH - hw) / 2, (WINDOW_HEIGHT + th) / 2 + 4)
-    end
+    love.graphics.setColor(0.6,0.6,0.6)
+    love.graphics.print("Left: WASD | Right: AI | Start: Space | Quit: Esc",
+                        20, WINDOW_HEIGHT - 28)
+    love.graphics.setColor(COLOR_FG)
 end
 
 function love.keypressed(key)
-    if key == "escape" then love.event.quit() end
-    if key == "space" and state == "over" then
-        scorePlayer, scoreEnemy = 0, 0
-        state = "serve"
-        serveDir = (love.math.random() < 0.5) and -1 or 1
-        serveTimer = 0.7
+    if key == 'space' then
+        if gameState ~= "play" then
+            playerScore, opponentScore = 0, 0
+            ball:reset()
+            gameState = "play"
+        end
+    elseif key == 'escape' then
+        love.event.quit()
     end
 end
 
 
+
+
+   
+     
+
+       
+      
+-
+ 
+               
+ 
+
+
+  
+   
+
+
+
+  
+    
+   
+  
+
+   
+  
+      
 
  
 
