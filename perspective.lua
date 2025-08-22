@@ -55,10 +55,3 @@ function Perspective.project(x, y, h)
 end
 
 return Perspective
-
-
-
-
-
- 
-
