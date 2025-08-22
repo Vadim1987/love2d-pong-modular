@@ -1,4 +1,3 @@
--- ai.lua
 -- AI strategies for horizontal & vertical movement
 
 local AI = {}
