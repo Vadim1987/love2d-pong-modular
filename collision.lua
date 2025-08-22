@@ -1,11 +1,10 @@
--- collision.lua
--- Collision: ellipse-vs-rect swept collision & bat-relative reflection
+-- Collision: circle-vs-rect swept collision & bat-relative reflection
 
 local function clamp(val, min, max)
     return math.max(min, math.min(max, val))
 end
 
--- Swept collision for ellipse
+-- Swept collision (sampled across the frame)
 local function sweptCollision(ball, paddle)
     local steps = 8
     for i=1,steps do
@@ -16,8 +15,7 @@ local function sweptCollision(ball, paddle)
         local closestY = clamp(test_y, paddle.y, paddle.y + paddle.height)
         local dx = test_x - closestX
         local dy = test_y - closestY
-        -- Эллиптическая формула: (dx^2)/(a^2) + (dy^2)/(b^2) <= 1
-        if (dx*dx)/(ball.radiusX*ball.radiusX) + (dy*dy)/(ball.radiusY*ball.radiusY) <= 1 then
+        if (dx*dx + dy*dy) <= (ball.radius * ball.radius) then
             ball.x, ball.y = test_x, test_y
             return true
         end
@@ -48,3 +46,11 @@ return {
     sweptCollision = sweptCollision,
     bounceRelative = bounceRelative
 }
+
+   
+   
+  
+   
+
+
+
